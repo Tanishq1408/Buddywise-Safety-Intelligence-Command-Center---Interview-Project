@@ -264,12 +264,13 @@ def create_kpi_card(title, value, subtitle="", color="#F8FAFC", delta=None):
     """, unsafe_allow_html=True)
 
 
-
 def safe_mean(series):
     return series.mean() if len(series) > 0 else 0
 
+
 def safe_value_counts(df, column):
     return df[column].value_counts() if len(df) > 0 else pd.Series(dtype=int)
+
 
 # ============================================================
 # TABS
@@ -318,79 +319,92 @@ with tab1:
 
     with col1:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Daily Alert Volume by Scenario</h4>", unsafe_allow_html=True)
-        daily = filtered_df.groupby([filtered_df['timestamp'].dt.date, 'scenario_type']).size().reset_index(name='count')
-        daily['timestamp'] = pd.to_datetime(daily['timestamp'])
-        daily_pivot = daily.pivot(index='timestamp', columns='scenario_type', values='count').fillna(0)
+        if len(filtered_df) > 0:
+            daily = filtered_df.groupby([filtered_df['timestamp'].dt.date, 'scenario_type']).size().reset_index(name='count')
+            daily['timestamp'] = pd.to_datetime(daily['timestamp'])
+            daily_pivot = daily.pivot(index='timestamp', columns='scenario_type', values='count').fillna(0)
 
-        fig = go.Figure()
-        for scenario in daily_pivot.columns:
-            fig.add_trace(go.Scatter(
-                x=daily_pivot.index, y=daily_pivot[scenario],
-                mode='lines', name=scenario,
-                line=dict(width=2, color=SCENARIO_COLORS.get(scenario, ACCENT_COLOR)),
-                stackgroup='one'
-            ))
-        fig.update_layout(
-            plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font_size=11),
-            margin=dict(l=20, r=20, t=60, b=20), xaxis_title="Date", yaxis_title="Alert Count",
-            height=400, hovermode='x unified'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            fig = go.Figure()
+            for scenario in daily_pivot.columns:
+                fig.add_trace(go.Scatter(
+                    x=daily_pivot.index, y=daily_pivot[scenario],
+                    mode='lines', name=scenario,
+                    line=dict(width=2, color=SCENARIO_COLORS.get(scenario, ACCENT_COLOR)),
+                    stackgroup='one'
+                ))
+            fig.update_layout(
+                plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font_size=11),
+                margin=dict(l=20, r=20, t=60, b=20), xaxis_title="Date", yaxis_title="Alert Count",
+                height=400, hovermode='x unified'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data available for current filters.")
 
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Scenario Breakdown</h4>", unsafe_allow_html=True)
         scenario_counts = safe_value_counts(filtered_df, 'scenario_type')
-        colors = [SCENARIO_COLORS.get(s, ACCENT_COLOR) for s in scenario_counts.index]
-
-        fig = go.Figure(data=[go.Pie(
-            labels=scenario_counts.index, values=scenario_counts.values,
-            hole=0.60, marker_colors=colors,
-            textinfo='label+percent', textfont=dict(color=TEXT_COLOR, size=11)
-        )])
-        fig.update_layout(
-            plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR,
-            showlegend=False, margin=dict(l=20, r=20, t=40, b=20), height=400
-        )
-        fig.add_annotation(text=f"<b>{total:,}</b><br>Total", x=0.5, y=0.5, font_size=18, showarrow=False, font_color=TEXT_COLOR)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(scenario_counts) > 0:
+            colors = [SCENARIO_COLORS.get(s, ACCENT_COLOR) for s in scenario_counts.index]
+            fig = go.Figure(data=[go.Pie(
+                labels=scenario_counts.index, values=scenario_counts.values,
+                hole=0.60, marker_colors=colors,
+                textinfo='label+percent', textfont=dict(color=TEXT_COLOR, size=11)
+            )])
+            fig.update_layout(
+                plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR,
+                showlegend=False, margin=dict(l=20, r=20, t=40, b=20), height=400
+            )
+            fig.add_annotation(text=f"<b>{total:,}</b><br>Total", x=0.5, y=0.5, font_size=18, showarrow=False, font_color=TEXT_COLOR)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No scenario data available.")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Severity Distribution</h4>", unsafe_allow_html=True)
         sev_counts = safe_value_counts(filtered_df, 'severity')
-        colors = [SEVERITY_COLORS[s] for s in sev_counts.index]
-        fig = go.Figure(go.Bar(x=sev_counts.index, y=sev_counts.values, marker_color=colors, text=sev_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=20, t=40, b=20), height=300, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(sev_counts) > 0:
+            colors = [SEVERITY_COLORS[s] for s in sev_counts.index]
+            fig = go.Figure(go.Bar(x=sev_counts.index, y=sev_counts.values, marker_color=colors, text=sev_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=20, t=40, b=20), height=300, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No severity data available.")
 
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Hour</h4>", unsafe_allow_html=True)
-        filtered_df['hour'] = filtered_df['timestamp'].dt.hour
-               hourly = filtered_df.groupby('hour').size().reset_index(name='count')
-        if len(hourly) > 0:
-            fig = go.Figure(go.Scatter(
-                x=hourly['hour'], y=hourly['count'], mode='lines+markers',
-                line=dict(color=ACCENT_COLOR, width=3), marker=dict(size=8),
-                fill='tozeroy', fillcolor="rgba(59, 130, 246, 0.15)"
-            ))
-            fig.add_vrect(x0=22, x1=6, fillcolor=CRITICAL_COLOR, opacity=0.12, line_width=0, annotation_text="Night Shift", annotation_position="top left", annotation_font_color=CRITICAL_COLOR)
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Count", margin=dict(l=20, r=20, t=60, b=20), height=300)
-            st.plotly_chart(fig, use_container_width=True)
+        if len(filtered_df) > 0:
+            filtered_df['hour'] = filtered_df['timestamp'].dt.hour
+            hourly = filtered_df.groupby('hour').size().reset_index(name='count')
+            if len(hourly) > 0:
+                fig = go.Figure(go.Scatter(
+                    x=hourly['hour'], y=hourly['count'], mode='lines+markers',
+                    line=dict(color=ACCENT_COLOR, width=3), marker=dict(size=8),
+                    fill='tozeroy', fillcolor="rgba(59, 130, 246, 0.15)"
+                ))
+                fig.add_vrect(x0=22, x1=6, fillcolor=CRITICAL_COLOR, opacity=0.12, line_width=0, annotation_text="Night Shift", annotation_position="top left", annotation_font_color=CRITICAL_COLOR)
+                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Count", margin=dict(l=20, r=20, t=60, b=20), height=300)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hourly data available.")
         else:
-            st.info("No hourly data available for current filters.")
-            
+            st.info("No data available for current filters.")
+
     with col3:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Site</h4>", unsafe_allow_html=True)
         site_counts = safe_value_counts(filtered_df, 'site')
-        fig = go.Figure(go.Bar(
-            y=site_counts.index, x=site_counts.values, orientation='h',
-            marker=dict(color=site_counts.values, colorscale=[[0, LOW_COLOR], [0.5, MEDIUM_COLOR], [1, CRITICAL_COLOR]], showscale=False),
-            text=site_counts.values, textposition='outside'
-        ))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=40, b=20), height=300, yaxis=dict(tickfont=dict(size=10)))
-        st.plotly_chart(fig, use_container_width=True)
+        if len(site_counts) > 0:
+            fig = go.Figure(go.Bar(
+                y=site_counts.index, x=site_counts.values, orientation='h',
+                marker=dict(color=site_counts.values, colorscale=[[0, LOW_COLOR], [0.5, MEDIUM_COLOR], [1, CRITICAL_COLOR]], showscale=False), text=site_counts.values, textposition='outside'
+            ))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=40, b=20), height=300, yaxis=dict(tickfont=dict(size=10)))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No site data available.")
 
     # Critical Insights
     st.divider()
@@ -459,66 +473,74 @@ with tab2:
 
         with col1:
             st.markdown("<h4 style='color:#F8FAFC;'>Zone x Severity Heatmap</h4>", unsafe_allow_html=True)
-            zone_sev = site_alerts.groupby(['zone', 'severity']).size().unstack(fill_value=0)
-            for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
-                if col not in zone_sev.columns:
-                    zone_sev[col] = 0
-            zone_sev = zone_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
+            if len(site_alerts) > 0:
+                zone_sev = site_alerts.groupby(['zone', 'severity']).size().unstack(fill_value=0)
+                for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                    if col not in zone_sev.columns:
+                        zone_sev[col] = 0
+                zone_sev = zone_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
 
-            fig = go.Figure(data=go.Heatmap(
-                z=zone_sev.values, x=zone_sev.columns, y=zone_sev.index,
-                colorscale=[[0, BG_COLOR], [0.2, LOW_COLOR], [0.5, MEDIUM_COLOR], [0.8, HIGH_COLOR], [1, CRITICAL_COLOR]],
-                text=zone_sev.values, texttemplate="%{text}", textfont={"size": 13, "color": TEXT_COLOR},
-                hovertemplate='Zone: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
-                colorbar=dict(title="Alerts", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
-            ))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Zone", margin=dict(l=20, r=80, t=40, b=20), height=450)
-            st.plotly_chart(fig, use_container_width=True)
+                fig = go.Figure(data=go.Heatmap(
+                    z=zone_sev.values, x=zone_sev.columns, y=zone_sev.index,
+                    colorscale=[[0, BG_COLOR], [0.2, LOW_COLOR], [0.5, MEDIUM_COLOR], [0.8, HIGH_COLOR], [1, CRITICAL_COLOR]],
+                    text=zone_sev.values, texttemplate="%{text}", textfont={"size": 13, "color": TEXT_COLOR},
+                    hovertemplate='Zone: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
+                    colorbar=dict(title="Alerts", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+                ))
+                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Zone", margin=dict(l=20, r=80, t=40, b=20), height=450)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No data for selected site.")
 
         with col2:
             st.markdown("<h4 style='color:#F8FAFC;'>Zone Risk Summary</h4>", unsafe_allow_html=True)
-            zone_risk = site_alerts.groupby('zone').agg({
-                'alert_id': 'count',
-                'severity': lambda x: (x == 'CRITICAL').sum() / len(x) * 100 if len(x) > 0 else 0,
-                'response_time_mins': lambda x: x.mean() if len(x) > 0 else 0
-            }).reset_index()
-            zone_risk.columns = ['zone', 'total', 'critical_pct', 'avg_response']
-            zone_risk = zone_risk.sort_values('critical_pct', ascending=False)
+            if len(site_alerts) > 0:
+                zone_risk = site_alerts.groupby('zone').agg({
+                    'alert_id': 'count',
+                    'severity': lambda x: (x == 'CRITICAL').sum() / len(x) * 100 if len(x) > 0 else 0,
+                    'response_time_mins': lambda x: x.mean() if len(x) > 0 else 0
+                }).reset_index()
+                zone_risk.columns = ['zone', 'total', 'critical_pct', 'avg_response']
+                zone_risk = zone_risk.sort_values('critical_pct', ascending=False)
 
-            for _, row in zone_risk.head(5).iterrows():
-                risk_color = CRITICAL_COLOR if row['critical_pct'] > 20 else HIGH_COLOR if row['critical_pct'] > 10 else MEDIUM_COLOR
-                st.markdown(f"""
-                <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:10px; padding:12px; margin:8px 0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color:#F8FAFC; font-weight:600; font-size:13px;">{row['zone']}</span>
-                        <span style="color:{risk_color}; font-weight:700; font-size:14px;">{row['critical_pct']:.1f}% CRIT</span>
+                for _, row in zone_risk.head(5).iterrows():
+                    risk_color = CRITICAL_COLOR if row['critical_pct'] > 20 else HIGH_COLOR if row['critical_pct'] > 10 else MEDIUM_COLOR
+                    st.markdown(f"""
+                    <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:10px; padding:12px; margin:8px 0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#F8FAFC; font-weight:600; font-size:13px;">{row['zone']}</span>
+                            <span style="color:{risk_color}; font-weight:700; font-size:14px;">{row['critical_pct']:.1f}% CRIT</span>
+                        </div>
+                        <div style="color:#94A3B8; font-size:11px; margin-top:4px;">{row['total']} alerts | {row['avg_response']:.1f}m avg response</div>
                     </div>
-                    <div style="color:#94A3B8; font-size:11px; margin-top:4px;">{row['total']} alerts | {row['avg_response']:.1f}m avg response</div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
 
-            high_risk_in_site = [z for z in zone_risk['zone'] if z in HIGH_RISK_ZONES]
-            if high_risk_in_site:
-                st.markdown(f"""
-                <div style="background:#451A1A; border:1px solid #EF4444; border-radius:10px; padding:12px; margin-top:12px;">
-                    <span style="color:#EF4444; font-weight:700; font-size:13px;">High-Risk Zones Active</span><br>
-                    <span style="color:#F8FAFC; font-size:12px;">{', '.join(high_risk_in_site)} require enhanced monitoring per Buddywise safety protocols.</span>
-                </div>
-                """, unsafe_allow_html=True)
+                high_risk_in_site = [z for z in zone_risk['zone'] if z in HIGH_RISK_ZONES]
+                if high_risk_in_site:
+                    st.markdown(f"""
+                    <div style="background:#451A1A; border:1px solid #EF4444; border-radius:10px; padding:12px; margin-top:12px;">
+                        <span style="color:#EF4444; font-weight:700; font-size:13px;">High-Risk Zones Active</span><br>
+                        <span style="color:#F8FAFC; font-size:12px;">{', '.join(high_risk_in_site)} require enhanced monitoring per Buddywise safety protocols.</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No zone data available.")
 
     st.divider()
 
     st.markdown("<h4 style='color:#F8FAFC;'>Cross-Site Critical Alert Density</h4>", unsafe_allow_html=True)
     cross_site = filtered_df[filtered_df['severity'] == 'CRITICAL'].groupby(['site', 'zone']).size().unstack(fill_value=0)
-
-    fig = go.Figure(data=go.Heatmap(
-        z=cross_site.values, x=cross_site.columns, y=cross_site.index,
-        colorscale=[[0, BG_COLOR], [0.5, HIGH_COLOR], [1, CRITICAL_COLOR]],
-        hovertemplate='Site: %{y}<br>Zone: %{x}<br>Critical: %{z}<extra></extra>',
-        colorbar=dict(title="Critical", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
-    ))
-    fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Zone", yaxis_title="Site", margin=dict(l=20, r=80, t=40, b=20), height=350)
-    st.plotly_chart(fig, use_container_width=True)
+    if len(cross_site) > 0:
+        fig = go.Figure(data=go.Heatmap(
+            z=cross_site.values, x=cross_site.columns, y=cross_site.index,
+            colorscale=[[0, BG_COLOR], [0.5, HIGH_COLOR], [1, CRITICAL_COLOR]],
+            hovertemplate='Site: %{y}<br>Zone: %{x}<br>Critical: %{z}<extra></extra>',
+            colorbar=dict(title="Critical", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+        ))
+        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Zone", yaxis_title="Site", margin=dict(l=20, r=80, t=40, b=20), height=350)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No critical alerts for cross-site heatmap.")
 
 
 # ============================================================
@@ -539,15 +561,17 @@ with tab3:
 
     with col1:
         st.markdown("<h4 style='color:#F8FAFC;'>Top 15 Highest-Risk Workers</h4>", unsafe_allow_html=True)
-        top_risk = filtered_workers.nlargest(min(15, len(filtered_workers)), 'risk_score') if len(filtered_workers) > 0 else filtered_workers
-
-        fig = go.Figure(go.Bar(
-            x=top_risk['risk_score'], y=top_risk['worker_id'], orientation='h',
-            marker=dict(color=top_risk['risk_score'], colorscale=[[0, LOW_COLOR], [0.4, MEDIUM_COLOR], [0.7, HIGH_COLOR], [1, CRITICAL_COLOR]]),
-            text=top_risk['risk_score'].round(1), textposition='outside', textfont=dict(color=TEXT_COLOR)
-        ))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Risk Score", yaxis_title="Worker ID", margin=dict(l=20, r=60, t=40, b=20), height=450)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(filtered_workers) > 0:
+            top_risk = filtered_workers.nlargest(min(15, len(filtered_workers)), 'risk_score')
+            fig = go.Figure(go.Bar(
+                x=top_risk['risk_score'], y=top_risk['worker_id'], orientation='h',
+                marker=dict(color=top_risk['risk_score'], colorscale=[[0, LOW_COLOR], [0.4, MEDIUM_COLOR], [0.7, HIGH_COLOR], [1, CRITICAL_COLOR]]),
+                text=top_risk['risk_score'].round(1), textposition='outside', textfont=dict(color=TEXT_COLOR)
+            ))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Risk Score", yaxis_title="Worker ID", margin=dict(l=20, r=60, t=40, b=20), height=450)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No worker risk data available.")
 
     with col2:
         st.markdown("<h4 style='color:#F8FAFC;'>Department Risk Analysis</h4>", unsafe_allow_html=True)
@@ -555,14 +579,16 @@ with tab3:
             'risk_score': 'mean', 'worker_id': 'count', 'critical_count': 'mean'
         }).reset_index()
         dept_stats.columns = ['department', 'avg_risk', 'headcount', 'avg_critical']
-
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Bar(x=dept_stats['department'], y=dept_stats['avg_risk'], name='Avg Risk Score', marker_color=ACCENT_COLOR, text=dept_stats['avg_risk'].round(1), textposition='outside'), secondary_y=False)
-        fig.add_trace(go.Scatter(x=dept_stats['department'], y=dept_stats['headcount'], name='Headcount', mode='lines+markers', line=dict(color=MUTED_TEXT, width=2), marker=dict(size=8)), secondary_y=True)
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=60, t=40, b=20), height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.update_yaxes(title_text="Risk Score", secondary_y=False, gridcolor=BORDER_COLOR)
-        fig.update_yaxes(title_text="Headcount", secondary_y=True, gridcolor=BORDER_COLOR)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(dept_stats) > 0:
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(go.Bar(x=dept_stats['department'], y=dept_stats['avg_risk'], name='Avg Risk Score', marker_color=ACCENT_COLOR, text=dept_stats['avg_risk'].round(1), textposition='outside'), secondary_y=False)
+            fig.add_trace(go.Scatter(x=dept_stats['department'], y=dept_stats['headcount'], name='Headcount', mode='lines+markers', line=dict(color=MUTED_TEXT, width=2), marker=dict(size=8)), secondary_y=True)
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=60, t=40, b=20), height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_yaxes(title_text="Risk Score", secondary_y=False, gridcolor=BORDER_COLOR)
+            fig.update_yaxes(title_text="Headcount", secondary_y=True, gridcolor=BORDER_COLOR)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No department data available.")
 
     st.divider()
 
@@ -589,16 +615,19 @@ with tab3:
 
     for col, (metric, title, subtitle) in zip([col1, col2, col3, col4], metrics):
         with col:
-            fig = go.Figure()
-            colors = [LOW_COLOR, CRITICAL_COLOR]
-            for i, row in train_df.iterrows():
-                fig.add_trace(go.Bar(x=[row['status']], y=[row[metric]], marker_color=colors[i], text=[f"{row[metric]:.2f}"], textposition='outside', textfont=dict(color=TEXT_COLOR, size=14)))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, yaxis_title=title, margin=dict(l=20, r=20, t=20, b=20), height=280)
-            st.plotly_chart(fig, use_container_width=True)
+            if len(train_df) > 0:
+                fig = go.Figure()
+                colors = [LOW_COLOR, CRITICAL_COLOR]
+                for i, row in train_df.iterrows():
+                    fig.add_trace(go.Bar(x=[row['status']], y=[row[metric]], marker_color=colors[i], text=[f"{row[metric]:.2f}"], textposition='outside', textfont=dict(color=TEXT_COLOR, size=14)))
+                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, yaxis_title=title, margin=dict(l=20, r=20, t=20, b=20), height=280)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No data")
             st.markdown(f"<p style='text-align:center; color:#94A3B8; font-size:11px;'>{subtitle}</p>", unsafe_allow_html=True)
 
-    trained_crit = train_df[train_df['status'] == 'Trained']['avg_critical'].values[0]
-    untrained_crit = train_df[train_df['status'] == 'Untrained']['avg_critical'].values[0]
+    trained_crit = train_df[train_df['status'] == 'Trained']['avg_critical'].values[0] if len(train_df[train_df['status'] == 'Trained']) > 0 else 0
+    untrained_crit = train_df[train_df['status'] == 'Untrained']['avg_critical'].values[0] if len(train_df[train_df['status'] == 'Untrained']) > 0 else 0
     roi_pct = ((untrained_crit - trained_crit) / trained_crit * 100) if trained_crit > 0 else 0
 
     st.markdown(f"""
@@ -737,22 +766,34 @@ with tab4:
 
     with col1:
         crit_violation = safe_value_counts(crit_df, 'scenario_type').head(5)
-        fig = go.Figure(go.Bar(x=crit_violation.values, y=crit_violation.index, orientation='h', marker_color=CRITICAL_COLOR, text=crit_violation.values, textposition='outside'))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=20, b=20), height=280, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(crit_violation) > 0:
+            fig = go.Figure(go.Bar(x=crit_violation.values, y=crit_violation.index, orientation='h', marker_color=CRITICAL_COLOR, text=crit_violation.values, textposition='outside'))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=20, b=20), height=280, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No critical scenario data.")
 
     with col2:
         crit_shift = safe_value_counts(crit_df, 'shift')
-        fig = go.Figure(go.Pie(labels=crit_shift.index, values=crit_shift.values, marker_colors=[MEDIUM_COLOR, HIGH_COLOR, CRITICAL_COLOR], textinfo='label+percent', textfont=dict(color=TEXT_COLOR)))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=280)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(crit_shift) > 0:
+            fig = go.Figure(go.Pie(labels=crit_shift.index, values=crit_shift.values, marker_colors=[MEDIUM_COLOR, HIGH_COLOR, CRITICAL_COLOR], textinfo='label+percent', textfont=dict(color=TEXT_COLOR)))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=280)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No critical shift data.")
 
     with col3:
-        crit_hour = crit_df.groupby(crit_df['timestamp'].dt.hour).size()
-        fig = go.Figure(go.Bar(x=crit_hour.index, y=crit_hour.values, marker_color=CRITICAL_COLOR))
-        fig.add_vrect(x0=22, x1=6, fillcolor=HIGH_COLOR, opacity=0.15, line_width=0)
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Critical Count", margin=dict(l=20, r=20, t=20, b=20), height=280, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(crit_df) > 0:
+            crit_hour = crit_df.groupby(crit_df['timestamp'].dt.hour).size()
+            if len(crit_hour) > 0:
+                fig = go.Figure(go.Bar(x=crit_hour.index, y=crit_hour.values, marker_color=CRITICAL_COLOR))
+                fig.add_vrect(x0=22, x1=6, fillcolor=HIGH_COLOR, opacity=0.15, line_width=0)
+                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Critical Count", margin=dict(l=20, r=20, t=20, b=20), height=280, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No critical hourly data.")
+        else:
+            st.info("No critical alerts for hourly analysis.")
 
 
 # ============================================================
@@ -888,7 +929,9 @@ with tab6:
                 Escalation: Auto-escalate if unresponded > 5 min
             </div>
         </div>
+        """, unsafe_allow_html=True)
 
+        st.markdown("""
         <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <span style="color:#F8FAFC; font-weight:600; font-size:13px;">HIGH Alerts</span>
@@ -900,7 +943,9 @@ with tab6:
                 Escalation: Supervisor after 15 min unresponded
             </div>
         </div>
+        """, unsafe_allow_html=True)
 
+        st.markdown("""
         <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <span style="color:#F8FAFC; font-weight:600; font-size:13px;">MEDIUM Alerts</span>
@@ -912,7 +957,9 @@ with tab6:
                 Escalation: Daily summary
             </div>
         </div>
+        """, unsafe_allow_html=True)
 
+        st.markdown("""
         <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <span style="color:#F8FAFC; font-weight:600; font-size:13px;">LOW Alerts</span>
@@ -945,39 +992,48 @@ with tab6:
         channel_df = pd.DataFrame(channel_data)
         channel_counts = safe_value_counts(channel_df, 'channel')
 
-        fig = go.Figure(go.Bar(
-            x=channel_counts.values, y=channel_counts.index, orientation='h',
-            marker=dict(color=channel_counts.values, colorscale=[[0, ACCENT_COLOR], [1, ACCENT_GLOW]]),
-            text=channel_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)
-        ))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Notification Count", yaxis_title=None, margin=dict(l=20, r=60, t=40, b=20), height=300, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(channel_counts) > 0:
+            fig = go.Figure(go.Bar(
+                x=channel_counts.values, y=channel_counts.index, orientation='h',
+                marker=dict(color=channel_counts.values, colorscale=[[0, ACCENT_COLOR], [1, ACCENT_GLOW]]),
+                text=channel_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)
+            ))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Notification Count", yaxis_title=None, margin=dict(l=20, r=60, t=40, b=20), height=300, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No notification data available.")
 
         st.markdown("<h5 style='color:#F8FAFC; margin-top:16px;'>Channel x Severity Matrix</h5>", unsafe_allow_html=True)
-        ch_sev = channel_df.groupby(['channel', 'severity']).size().unstack(fill_value=0)
-        for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
-            if col not in ch_sev.columns:
-                ch_sev[col] = 0
-        ch_sev = ch_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
+        if len(channel_df) > 0:
+            ch_sev = channel_df.groupby(['channel', 'severity']).size().unstack(fill_value=0)
+            for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                if col not in ch_sev.columns:
+                    ch_sev[col] = 0
+            ch_sev = ch_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
 
-        fig = go.Figure(data=go.Heatmap(
-            z=ch_sev.values, x=ch_sev.columns, y=ch_sev.index,
-            colorscale=[[0, BG_COLOR], [0.3, MEDIUM_COLOR], [0.7, HIGH_COLOR], [1, CRITICAL_COLOR]],
-            text=ch_sev.values, texttemplate="%{text}", textfont=dict(color=TEXT_COLOR, size=12),
-            hovertemplate='Channel: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
-            colorbar=dict(title="Count", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
-        ))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Channel", margin=dict(l=20, r=80, t=40, b=20), height=350)
-        st.plotly_chart(fig, use_container_width=True)
+            fig = go.Figure(data=go.Heatmap(
+                z=ch_sev.values, x=ch_sev.columns, y=ch_sev.index,
+                colorscale=[[0, BG_COLOR], [0.3, MEDIUM_COLOR], [0.7, HIGH_COLOR], [1, CRITICAL_COLOR]],
+                text=ch_sev.values, texttemplate="%{text}", textfont=dict(color=TEXT_COLOR, size=12),
+                hovertemplate='Channel: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
+                colorbar=dict(title="Count", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+            ))
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Channel", margin=dict(l=20, r=80, t=40, b=20), height=350)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No channel severity data.")
 
         st.markdown("<h5 style='color:#F8FAFC; margin-top:16px;'>Escalation Timeline</h5>", unsafe_allow_html=True)
         unresp = filtered_df[filtered_df['responded'] == False]
         if len(unresp) > 0:
             unresp_hourly = unresp.groupby(unresp['timestamp'].dt.hour).size()
-            fig = go.Figure(go.Bar(x=unresp_hourly.index, y=unresp_hourly.values, marker_color=CRITICAL_COLOR))
-            fig.add_hline(y=safe_mean(unresp_hourly), line_dash="dash", line_color=MUTED_TEXT, annotation_text=f"Avg: {safe_mean(unresp_hourly):.1f}/hour", annotation_position="top right")
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour of Day", yaxis_title="Unresponded Count", margin=dict(l=20, r=20, t=40, b=20), height=250, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            if len(unresp_hourly) > 0:
+                fig = go.Figure(go.Bar(x=unresp_hourly.index, y=unresp_hourly.values, marker_color=CRITICAL_COLOR))
+                fig.add_hline(y=safe_mean(unresp_hourly), line_dash="dash", line_color=MUTED_TEXT, annotation_text=f"Avg: {safe_mean(unresp_hourly):.1f}/hour", annotation_position="top right")
+                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour of Day", yaxis_title="Unresponded Count", margin=dict(l=20, r=20, t=40, b=20), height=250, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hourly escalation data.")
         else:
             st.success("All alerts responded! Zero escalation queue.")
 
