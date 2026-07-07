@@ -188,8 +188,14 @@ def generate_alerts(n=5000, workers_df=None):
         scenario = RISK_SCENARIOS[scenario_key]
 
         # Zone selection (must match scenario's relevant zones)
-        zone = random.choice([z for z in site_config['zones'] if any(rz in z for rz in scenario['zones']) 
-                              or random.random() < 0.3])
+        matching_zones = [z for z in site_config['zones'] if any(rz in z for rz in scenario['zones'])]
+        fallback_zones = [z for z in site_config['zones'] if z not in matching_zones]
+        if matching_zones and random.random() < 0.7:
+            zone = random.choice(matching_zones)
+        elif fallback_zones:
+            zone = random.choice(fallback_zones)
+        else:
+            zone = random.choice(site_config['zones'])
 
         # Violation from scenario
         violation = random.choice(scenario['violations'])
