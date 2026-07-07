@@ -79,33 +79,43 @@ st.markdown("""
         background: linear-gradient(135deg, #151E32 0%, #0B1120 100%);
         border: 1px solid #2D3A4F;
         border-radius: 16px;
-        padding: 24px;
+        padding: 20px 16px;
         text-align: center;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        height: 100%;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
     .metric-card:hover {
         border-color: #3B82F6;
         box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
     }
     .metric-value {
-        font-size: 36px;
+        font-size: 32px;
         font-weight: 800;
         color: #F8FAFC;
         letter-spacing: -0.5px;
+        line-height: 1.2;
+        margin-bottom: 4px;
     }
     .metric-label {
-        font-size: 13px;
+        font-size: 11px;
         color: #94A3B8;
-        margin-top: 8px;
+        margin-top: 4px;
         font-weight: 500;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        line-height: 1.3;
     }
     .metric-delta {
-        font-size: 12px;
-        margin-top: 6px;
+        font-size: 11px;
+        margin-top: 4px;
         font-weight: 600;
+        line-height: 1.2;
     }
 
     .insight-card {
@@ -223,7 +233,7 @@ date_range = st.sidebar.date_input(
 )
 
 selected_shifts = st.sidebar.multiselect(
-    "Shifts", options=alerts_df['shift'].unique(), default=list(alerts_df['shift'].unique())
+    "Shifts", options=list(alerts_df['shift'].unique()), default=list(alerts_df['shift'].unique())
 )
 
 selected_zones = st.sidebar.multiselect(
@@ -259,6 +269,7 @@ def create_kpi_card(title, value, subtitle="", color="#F8FAFC", delta=None):
     <div class="metric-card">
         <div class="metric-value" style="color:{color};">{value}</div>
         <div class="metric-label">{title}</div>
+        <div class="metric-label" style="margin-top:2px;">{subtitle}</div>
         {delta_html}
     </div>
     """, unsafe_allow_html=True)
@@ -305,13 +316,20 @@ with tab1:
     resolved = filtered_df['resolved'].sum()
     res_rate = (resolved / total * 100) if total > 0 else 0
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    with col1: create_kpi_card("Total Alerts", f"{total:,}", "All scenarios")
-    with col2: create_kpi_card("Critical", f"{critical}", f"{crit_pct:.1f}% of total", CRITICAL_COLOR)
-    with col3: create_kpi_card("Unresponded Critical", f"{unresp_crit}", "Requires escalation", CRITICAL_COLOR if unresp_crit > 0 else TEXT_COLOR)
-    with col4: create_kpi_card("False Positive Rate", f"{fp_rate:.1f}%", "AI model quality", MEDIUM_COLOR if fp_rate > 8 else LOW_COLOR)
-    with col5: create_kpi_card("Avg Response", f"{avg_resp:.1f}m", "All severity levels", ACCENT_COLOR)
-    with col6: create_kpi_card("Resolution Rate", f"{res_rate:.1f}%", f"{resolved} resolved", LOW_COLOR)
+    # FIXED: Use consistent column structure with proper alignment
+    cols = st.columns(6)
+    metrics = [
+        ("Total Alerts", f"{total:,}", "All scenarios", TEXT_COLOR, None),
+        ("Critical", f"{critical}", f"{crit_pct:.1f}% of total", CRITICAL_COLOR, None),
+        ("Unresponded Critical", f"{unresp_crit}", "Requires escalation", CRITICAL_COLOR if unresp_crit > 0 else TEXT_COLOR, None),
+        ("False Positive Rate", f"{fp_rate:.1f}%", "AI model quality", MEDIUM_COLOR if fp_rate > 8 else LOW_COLOR, None),
+        ("Avg Response", f"{avg_resp:.1f}m", "All severity levels", ACCENT_COLOR, None),
+        ("Resolution Rate", f"{res_rate:.1f}%", f"{int(resolved)} resolved", LOW_COLOR, None)
+    ]
+    
+    for col, (title, value, subtitle, color, delta) in zip(cols, metrics):
+        with col:
+            create_kpi_card(title, value, subtitle, color, delta)
 
     st.divider()
 
@@ -367,7 +385,7 @@ with tab1:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Severity Distribution</h4>", unsafe_allow_html=True)
         sev_counts = safe_value_counts(filtered_df, 'severity')
         if len(sev_counts) > 0:
-            colors = [SEVERITY_COLORS[s] for s in sev_counts.index]
+            colors = [SEVERITY_COLORS.get(s, ACCENT_COLOR) for s in sev_counts.index]
             fig = go.Figure(go.Bar(x=sev_counts.index, y=sev_counts.values, marker_color=colors, text=sev_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)))
             fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=20, t=40, b=20), height=300, showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
@@ -377,8 +395,9 @@ with tab1:
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Hour</h4>", unsafe_allow_html=True)
         if len(filtered_df) > 0:
-            filtered_df['hour'] = filtered_df['timestamp'].dt.hour
-            hourly = filtered_df.groupby('hour').size().reset_index(name='count')
+            hourly_df = filtered_df.copy()
+            hourly_df['hour'] = hourly_df['timestamp'].dt.hour
+            hourly = hourly_df.groupby('hour').size().reset_index(name='count')
             if len(hourly) > 0:
                 fig = go.Figure(go.Scatter(
                     x=hourly['hour'], y=hourly['count'], mode='lines+markers',
@@ -410,8 +429,8 @@ with tab1:
     st.divider()
     st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Critical Insights</h4>", unsafe_allow_html=True)
 
-    night_df = filtered_df[filtered_df['shift'] == SHIFTS[2]]
-    day_df = filtered_df[filtered_df['shift'] != SHIFTS[2]]
+    night_df = filtered_df[filtered_df['shift'] == SHIFTS[2]] if len(SHIFTS) > 2 else pd.DataFrame()
+    day_df = filtered_df[filtered_df['shift'] != SHIFTS[2]] if len(SHIFTS) > 2 else filtered_df.copy()
     night_crit_rate = (len(night_df[night_df['severity'] == 'CRITICAL']) / len(night_df) * 100) if len(night_df) > 0 else 0
     day_crit_rate = (len(day_df[day_df['severity'] == 'CRITICAL']) / len(day_df) * 100) if len(day_df) > 0 else 0
 
@@ -448,7 +467,7 @@ with tab1:
         <div class="insight-card">
             <b style="color:{ACCENT_COLOR};">Training ROI Case</b><br>
             <span style="color:#F8FAFC;">Untrained workers: <b>{untrained_crit_rate:.1f}%</b> critical rate vs trained: <b>{trained_crit_rate:.1f}%</b>. 
-            <b>{training_gap:.0f}% higher</b> critical rate without training. Strong business case for mandatory programs.</span>
+            {'Training gap of ' + f'{training_gap:.0f}%' + ' suggests immediate upskilling required.' if training_gap > 0 else 'Training program showing protective effect.'}</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -460,84 +479,118 @@ with tab2:
     st.markdown("""
     <div style="margin-bottom:24px;">
         <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Zone Heatmaps</h2>
-        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Identify safety hotspots across zones -- Buddywise's signature analytics feature</p>
+        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Spatial risk analysis across all monitored areas</p>
     </div>
     """, unsafe_allow_html=True)
 
-    selected_heatmap_site = st.selectbox("Select Site for Zone Analysis", options=selected_sites, key="heatmap_site")
+    selected_site_heat = st.selectbox("Select Site for Zone Analysis", options=list(SITES.keys()))
 
-    if selected_heatmap_site:
-        site_alerts = filtered_df[filtered_df['site'] == selected_heatmap_site]
+    col1, col2 = st.columns([3, 2])
 
-        col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("<h4 style='color:#F8FAFC;'>Zone Severity Heatmap</h4>", unsafe_allow_html=True)
+        site_alerts = filtered_df[filtered_df['site'] == selected_site_heat]
+        if len(site_alerts) > 0:
+            zone_sev = site_alerts.pivot_table(
+                index='zone', columns='severity', aggfunc='size', fill_value=0
+            )
+            # Ensure all severity columns exist
+            for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                if sev not in zone_sev.columns:
+                    zone_sev[sev] = 0
+            zone_sev = zone_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
+            
+            # FIXED: Use proper colorbar title format for Plotly 5.x
+            fig = go.Figure(data=go.Heatmap(
+                z=zone_sev.values, 
+                x=zone_sev.columns, 
+                y=zone_sev.index,
+                colorscale=[[0, BG_COLOR], [0.3, LOW_COLOR], [0.6, MEDIUM_COLOR], [0.8, HIGH_COLOR], [1, CRITICAL_COLOR]],
+                hovertemplate='Zone: %{y}<br>Severity: %{x}<br>Alerts: %{z}<extra></extra>',
+                colorbar=dict(
+                    title=dict(text="Alerts", font=dict(color=TEXT_COLOR)),
+                    tickfont=dict(color=TEXT_COLOR)
+                )
+            ))
+            fig.update_layout(
+                plot_bgcolor=BG_COLOR, 
+                paper_bgcolor=BG_COLOR, 
+                font_color=TEXT_COLOR, 
+                xaxis_title="Severity", 
+                yaxis_title="Zone", 
+                margin=dict(l=20, r=80, t=40, b=20), 
+                height=450
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data for selected site.")
 
-        with col1:
-            st.markdown("<h4 style='color:#F8FAFC;'>Zone x Severity Heatmap</h4>", unsafe_allow_html=True)
-            if len(site_alerts) > 0:
-                zone_sev = site_alerts.groupby(['zone', 'severity']).size().unstack(fill_value=0)
-                for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
-                    if col not in zone_sev.columns:
-                        zone_sev[col] = 0
-                zone_sev = zone_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
+    with col2:
+        st.markdown("<h4 style='color:#F8FAFC;'>Zone Risk Ranking</h4>", unsafe_allow_html=True)
+        if len(site_alerts) > 0:
+            zone_risk = site_alerts.groupby('zone').agg({
+                'severity': 'count',
+                'response_time_mins': lambda x: x.mean() if len(x) > 0 else 0
+            }).reset_index()
+            zone_risk.columns = ['zone', 'total', 'avg_response']
+            
+            # Calculate critical percentage safely
+            crit_counts = site_alerts[site_alerts['severity'] == 'CRITICAL'].groupby('zone').size()
+            zone_risk['critical_pct'] = zone_risk['zone'].map(
+                lambda z: (crit_counts.get(z, 0) / zone_risk[zone_risk['zone'] == z]['total'].iloc[0] * 100) 
+                if zone_risk[zone_risk['zone'] == z]['total'].iloc[0] > 0 else 0
+            )
+            zone_risk = zone_risk.sort_values('critical_pct', ascending=False)
 
-                fig = go.Figure(data=go.Heatmap(
-                    z=zone_sev.values, x=zone_sev.columns, y=zone_sev.index,
-                    colorscale=[[0, BG_COLOR], [0.2, LOW_COLOR], [0.5, MEDIUM_COLOR], [0.8, HIGH_COLOR], [1, CRITICAL_COLOR]],
-                    text=zone_sev.values, texttemplate="%{text}", textfont={"size": 13, "color": TEXT_COLOR},
-                    hovertemplate='Zone: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
-                    colorbar=dict(title="Alerts", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
-                ))
-                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Zone", margin=dict(l=20, r=80, t=40, b=20), height=450)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No data for selected site.")
-
-        with col2:
-            st.markdown("<h4 style='color:#F8FAFC;'>Zone Risk Summary</h4>", unsafe_allow_html=True)
-            if len(site_alerts) > 0:
-                zone_risk = site_alerts.groupby('zone').agg({
-                    'alert_id': 'count',
-                    'severity': lambda x: (x == 'CRITICAL').sum() / len(x) * 100 if len(x) > 0 else 0,
-                    'response_time_mins': lambda x: x.mean() if len(x) > 0 else 0
-                }).reset_index()
-                zone_risk.columns = ['zone', 'total', 'critical_pct', 'avg_response']
-                zone_risk = zone_risk.sort_values('critical_pct', ascending=False)
-
-                for _, row in zone_risk.head(5).iterrows():
-                    risk_color = CRITICAL_COLOR if row['critical_pct'] > 20 else HIGH_COLOR if row['critical_pct'] > 10 else MEDIUM_COLOR
-                    st.markdown(f"""
-                    <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:10px; padding:12px; margin:8px 0;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:#F8FAFC; font-weight:600; font-size:13px;">{row['zone']}</span>
-                            <span style="color:{risk_color}; font-weight:700; font-size:14px;">{row['critical_pct']:.1f}% CRIT</span>
-                        </div>
-                        <div style="color:#94A3B8; font-size:11px; margin-top:4px;">{row['total']} alerts | {row['avg_response']:.1f}m avg response</div>
+            for _, row in zone_risk.head(5).iterrows():
+                risk_color = CRITICAL_COLOR if row['critical_pct'] > 20 else HIGH_COLOR if row['critical_pct'] > 10 else MEDIUM_COLOR
+                st.markdown(f"""
+                <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:10px; padding:12px; margin:8px 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#F8FAFC; font-weight:600; font-size:13px;">{row['zone']}</span>
+                        <span style="color:{risk_color}; font-weight:700; font-size:14px;">{row['critical_pct']:.1f}% CRIT</span>
                     </div>
-                    """, unsafe_allow_html=True)
+                    <div style="color:#94A3B8; font-size:11px; margin-top:4px;">{row['total']} alerts | {row['avg_response']:.1f}m avg response</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                high_risk_in_site = [z for z in zone_risk['zone'] if z in HIGH_RISK_ZONES]
-                if high_risk_in_site:
-                    st.markdown(f"""
-                    <div style="background:#451A1A; border:1px solid #EF4444; border-radius:10px; padding:12px; margin-top:12px;">
-                        <span style="color:#EF4444; font-weight:700; font-size:13px;">High-Risk Zones Active</span><br>
-                        <span style="color:#F8FAFC; font-size:12px;">{', '.join(high_risk_in_site)} require enhanced monitoring per Buddywise safety protocols.</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("No zone data available.")
+            high_risk_in_site = [z for z in zone_risk['zone'] if z in HIGH_RISK_ZONES]
+            if high_risk_in_site:
+                st.markdown(f"""
+                <div style="background:#451A1A; border:1px solid #EF4444; border-radius:10px; padding:12px; margin-top:12px;">
+                    <span style="color:#EF4444; font-weight:700; font-size:13px;">High-Risk Zones Active</span><br>
+                    <span style="color:#F8FAFC; font-size:12px;">{', '.join(high_risk_in_site)} require enhanced monitoring per Buddywise safety protocols.</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No zone data available.")
 
     st.divider()
 
     st.markdown("<h4 style='color:#F8FAFC;'>Cross-Site Critical Alert Density</h4>", unsafe_allow_html=True)
     cross_site = filtered_df[filtered_df['severity'] == 'CRITICAL'].groupby(['site', 'zone']).size().unstack(fill_value=0)
     if len(cross_site) > 0:
+        # FIXED: Use proper colorbar title format for Plotly 5.x
         fig = go.Figure(data=go.Heatmap(
-            z=cross_site.values, x=cross_site.columns, y=cross_site.index,
+            z=cross_site.values, 
+            x=cross_site.columns, 
+            y=cross_site.index,
             colorscale=[[0, BG_COLOR], [0.5, HIGH_COLOR], [1, CRITICAL_COLOR]],
             hovertemplate='Site: %{y}<br>Zone: %{x}<br>Critical: %{z}<extra></extra>',
-            colorbar=dict(title="Critical", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+            colorbar=dict(
+                title=dict(text="Critical", font=dict(color=TEXT_COLOR)),
+                tickfont=dict(color=TEXT_COLOR)
+            )
         ))
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Zone", yaxis_title="Site", margin=dict(l=20, r=80, t=40, b=20), height=350)
+        fig.update_layout(
+            plot_bgcolor=BG_COLOR, 
+            paper_bgcolor=BG_COLOR, 
+            font_color=TEXT_COLOR, 
+            xaxis_title="Zone", 
+            yaxis_title="Site", 
+            margin=dict(l=20, r=80, t=40, b=20), 
+            height=350
+        )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No critical alerts for cross-site heatmap.")
@@ -604,14 +657,19 @@ with tab3:
             'workers': len(subset),
             'avg_alerts': len(worker_alerts) / len(subset) if len(subset) > 0 else 0,
             'avg_critical': len(worker_alerts[worker_alerts['severity'] == 'CRITICAL']) / len(subset) if len(subset) > 0 else 0,
-            'avg_risk': subset['risk_score'].mean(),
+            'avg_risk': subset['risk_score'].mean() if len(subset) > 0 else 0,
             'avg_response': safe_mean(worker_alerts[worker_alerts['responded'] == True]['response_time_mins'])
         })
 
     train_df = pd.DataFrame(training_comparison)
 
     col1, col2, col3, col4 = st.columns(4)
-    metrics = [('avg_alerts', 'Avg Alerts/Worker', 'Alerts per worker'), ('avg_critical', 'Avg Critical/Worker', 'Critical alerts per worker'), ('avg_risk', 'Avg Risk Score', 'Composite risk metric'), ('avg_response', 'Avg Response Time', 'Minutes to respond')]
+    metrics = [
+        ('avg_alerts', 'Avg Alerts/Worker', 'Alerts per worker'), 
+        ('avg_critical', 'Avg Critical/Worker', 'Critical alerts per worker'), 
+        ('avg_risk', 'Avg Risk Score', 'Composite risk metric'), 
+        ('avg_response', 'Avg Response Time', 'Minutes to respond')
+    ]
 
     for col, (metric, title, subtitle) in zip([col1, col2, col3, col4], metrics):
         with col:
@@ -619,8 +677,24 @@ with tab3:
                 fig = go.Figure()
                 colors = [LOW_COLOR, CRITICAL_COLOR]
                 for i, row in train_df.iterrows():
-                    fig.add_trace(go.Bar(x=[row['status']], y=[row[metric]], marker_color=colors[i], text=[f"{row[metric]:.2f}"], textposition='outside', textfont=dict(color=TEXT_COLOR, size=14)))
-                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, yaxis_title=title, margin=dict(l=20, r=20, t=20, b=20), height=280)
+                    val = row[metric] if pd.notna(row[metric]) else 0
+                    fig.add_trace(go.Bar(
+                        x=[row['status']], 
+                        y=[val], 
+                        marker_color=colors[i], 
+                        text=[f"{val:.2f}"], 
+                        textposition='outside', 
+                        textfont=dict(color=TEXT_COLOR, size=14)
+                    ))
+                fig.update_layout(
+                    plot_bgcolor=BG_COLOR, 
+                    paper_bgcolor=BG_COLOR, 
+                    font_color=TEXT_COLOR, 
+                    showlegend=False, 
+                    yaxis_title=title, 
+                    margin=dict(l=20, r=20, t=20, b=20), 
+                    height=280
+                )
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No data")
@@ -635,165 +709,115 @@ with tab3:
         <h3 style="color:{ACCENT_COLOR}; margin:0; font-size:24px; font-weight:800;">Training ROI: {roi_pct:.0f}% Reduction in Critical Alerts</h3>
         <p style="color:#F8FAFC; margin:8px 0 0 0; font-size:15px;">
             Untrained workers average <b>{untrained_crit:.2f}</b> critical alerts vs trained workers at <b>{trained_crit:.2f}</b>. 
-            At an estimated 50000 EUR per serious injury (DGUV data), training investment pays for itself in <b>3 weeks</b>.
-        </p>
+            At an estimated 50000 EUR per serious injury (DGUV data), training investment pays for itself in weeks.</p>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
 
 # ============================================================
-# TAB 4 -- PREDICTIVE RISK ENGINE
+# TAB 4 -- PREDICTIVE ENGINE
 # ============================================================
 with tab4:
     st.markdown("""
     <div style="margin-bottom:24px;">
-        <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Predictive Risk Engine</h2>
-        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Simulate scenarios and predict risk scores before incidents occur</p>
+        <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Predictive Safety Engine</h2>
+        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">AI-powered forecasting and proactive intervention triggers</p>
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 2])
+    if len(filtered_df) > 0:
+        # Time series for forecasting
+        daily_counts = filtered_df.groupby(filtered_df['timestamp'].dt.date).size().reset_index(name='alerts')
+        daily_counts['timestamp'] = pd.to_datetime(daily_counts['timestamp'])
+        daily_counts = daily_counts.sort_values('timestamp')
+        
+        if len(daily_counts) >= 3:
+            # Simple trend line
+            x_numeric = np.arange(len(daily_counts))
+            z = np.polyfit(x_numeric, daily_counts['alerts'], 1)
+            p = np.poly1d(z)
+            trend_next = p(len(daily_counts))
+            trend_prev = p(len(daily_counts) - 1)
+            trend_pct = ((trend_next - trend_prev) / trend_prev * 100) if trend_prev > 0 else 0
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                create_kpi_card("Trend Forecast", f"{trend_next:.0f}", "Next day predicted", CRITICAL_COLOR if trend_pct > 10 else LOW_COLOR)
+            with col2:
+                create_kpi_card("Trend Direction", f"{trend_pct:+.1f}%", "Day-over-day", CRITICAL_COLOR if trend_pct > 0 else LOW_COLOR)
+            with col3:
+                volatility = daily_counts['alerts'].std() / daily_counts['alerts'].mean() if daily_counts['alerts'].mean() > 0 else 0
+                create_kpi_card("Volatility Index", f"{volatility:.2f}", "Alert pattern stability", CRITICAL_COLOR if volatility > 0.5 else LOW_COLOR)
 
-    with col1:
-        st.markdown("<h4 style='color:#F8FAFC;'>Scenario Configuration</h4>", unsafe_allow_html=True)
-
-        pred_site = st.selectbox("Site", options=list(SITES.keys()), key="pred_site")
-        pred_zone = st.selectbox("Zone", options=SITES[pred_site]['zones'], key="pred_zone")
-        pred_scenario = st.selectbox("Risk Scenario", options=list(RISK_SCENARIOS.keys()), key="pred_scenario")
-        pred_violation = st.selectbox("Violation Type", options=RISK_SCENARIOS[pred_scenario]['violations'], key="pred_violation")
-        pred_hour = st.slider("Hour of Day", 0, 23, 14, key="pred_hour")
-        pred_shift = st.selectbox("Shift", options=SHIFTS, key="pred_shift")
-        pred_tenure = st.slider("Worker Tenure (years)", 0.0, 20.0, 2.0, 0.5, key="pred_tenure")
-        pred_trained = st.checkbox("Training Completed", value=True, key="pred_trained")
-        pred_lone = st.checkbox("Lone Worker", value=False, key="pred_lone")
-
-        base_scores = {'CRITICAL': 90, 'HIGH': 70, 'MEDIUM': 50, 'LOW': 30}
-        base_severity = RISK_SCENARIOS[pred_scenario]['severity_base'][pred_violation]
-        risk_score = base_scores[base_severity]
-        breakdown = [(f"Base: {pred_violation}", base_scores[base_severity])]
-
-        modifiers = []
-        if not pred_trained:
-            risk_score += 15; modifiers.append(("Untrained worker", 15))
-        if pred_tenure < 1:
-            risk_score += 12; modifiers.append(("Tenure < 1 year", 12))
-        if pred_shift == SHIFTS[2]:
-            risk_score += 10; modifiers.append(("Night shift", 10))
-        if pred_zone in HIGH_RISK_ZONES:
-            risk_score += 15; modifiers.append((f"High-risk zone: {pred_zone}", 15))
-        if pred_hour >= 22 or pred_hour <= 5:
-            risk_score += 8; modifiers.append(("Late night hours (22-05)", 8))
-        if pred_lone:
-            risk_score += 10; modifiers.append(("Lone worker (no buddy)", 10))
-        if pred_scenario == 'Person Down':
-            risk_score += 5; modifiers.append(("Person Down scenario", 5))
-
-        risk_score = min(100, risk_score)
-
-        if risk_score >= 85:
-            risk_level = "CRITICAL"; risk_class = "risk-critical"
-            advice = "STOP: Stop all work. Full safety lockdown. Escalate to site safety officer + emergency services on standby."
-        elif risk_score >= 65:
-            risk_level = "HIGH"; risk_class = "risk-high"
-            advice = "HIGH: Supervisor must verify before work proceeds. Enhanced PPE check. Buddy system mandatory."
-        elif risk_score >= 40:
-            risk_level = "MEDIUM"; risk_class = "risk-medium"
-            advice = "MEDIUM: Standard safety protocols. Ensure all guards and barriers in place. Monitor closely."
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=daily_counts['timestamp'], y=daily_counts['alerts'],
+                mode='lines+markers', name='Actual',
+                line=dict(color=ACCENT_COLOR, width=2), marker=dict(size=6)
+            ))
+            # Extend with prediction
+            last_date = daily_counts['timestamp'].max()
+            future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=3, freq='D')
+            future_vals = [p(len(daily_counts) + i) for i in range(3)]
+            fig.add_trace(go.Scatter(
+                x=future_dates, y=future_vals,
+                mode='lines+markers', name='Predicted',
+                line=dict(color=MEDIUM_COLOR, width=2, dash='dash'), marker=dict(size=6)
+            ))
+            fig.update_layout(
+                plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR,
+                xaxis_title="Date", yaxis_title="Alert Count",
+                margin=dict(l=20, r=20, t=60, b=20), height=400,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            risk_level = "LOW"; risk_class = "risk-low"
-            advice = "LOW: Routine operations. Maintain standard safety practices. Regular check-ins."
-
-    with col2:
-        st.markdown("<h4 style='color:#F8FAFC;'>Risk Assessment Result</h4>", unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div class="risk-card {risk_class}">
-            <div style="font-size:16px; margin-bottom:8px;">RISK LEVEL: {risk_level}</div>
-            <div style="font-size:56px; line-height:1;">{risk_score}</div>
-            <div style="font-size:14px; margin-top:4px; opacity:0.8;">out of 100</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:20px; margin-top:16px;">
-            <b style="color:#3B82F6; font-size:14px;">Recommended Action:</b><br>
-            <p style="color:#F8FAFC; margin:8px 0 0 0; font-size:14px; line-height:1.6;">{advice}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<h5 style='color:#F8FAFC; margin-top:20px;'>Score Breakdown</h5>", unsafe_allow_html=True)
-        breakdown_df = pd.DataFrame(modifiers, columns=['Risk Factor', 'Points'])
-        breakdown_df['Points'] = breakdown_df['Points'].astype(str) + ' pts'
-        st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
-
-        st.markdown("<h5 style='color:#F8FAFC; margin-top:20px;'>What-If: Training Impact</h5>", unsafe_allow_html=True)
-
-        trained_score = base_scores[base_severity]
-        if pred_tenure < 1: trained_score += 12
-        if pred_shift == SHIFTS[2]: trained_score += 10
-        if pred_zone in HIGH_RISK_ZONES: trained_score += 15
-        if pred_hour >= 22 or pred_hour <= 5: trained_score += 8
-        if pred_lone: trained_score += 10
-        if pred_scenario == 'Person Down': trained_score += 5
-        trained_score = min(100, trained_score)
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown(f"""
-            <div style="background:#451A1A; border:1px solid #EF4444; border-radius:10px; padding:16px; text-align:center;">
-                <div style="color:#94A3B8; font-size:12px;">WITHOUT TRAINING</div>
-                <div style="color:#EF4444; font-size:32px; font-weight:800;">{risk_score}</div>
-                <div style="color:#F8FAFC; font-size:12px;">{risk_level}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col_b:
-            trained_level = "CRITICAL" if trained_score >= 85 else "HIGH" if trained_score >= 65 else "MEDIUM" if trained_score >= 40 else "LOW"
-            trained_color = CRITICAL_COLOR if trained_level == "CRITICAL" else HIGH_COLOR if trained_level == "HIGH" else MEDIUM_COLOR if trained_level == "MEDIUM" else LOW_COLOR
-            st.markdown(f"""
-            <div style="background:rgba(34,197,94,0.1); border:1px solid #22C55E; border-radius:10px; padding:16px; text-align:center;">
-                <div style="color:#94A3B8; font-size:12px;">WITH TRAINING</div>
-                <div style="color:{trained_color}; font-size:32px; font-weight:800;">{trained_score}</div>
-                <div style="color:#F8FAFC; font-size:12px;">{trained_level}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info("Insufficient data for forecasting (minimum 3 days required).")
+    else:
+        st.info("No data available for predictive analysis.")
 
     st.divider()
 
-    st.markdown("<h4 style='color:#F8FAFC;'>Historical Drivers of Critical Alerts</h4>", unsafe_allow_html=True)
-
-    crit_df = filtered_df[filtered_df['severity'] == 'CRITICAL']
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        crit_violation = safe_value_counts(crit_df, 'scenario_type').head(5)
-        if len(crit_violation) > 0:
-            fig = go.Figure(go.Bar(x=crit_violation.values, y=crit_violation.index, orientation='h', marker_color=CRITICAL_COLOR, text=crit_violation.values, textposition='outside'))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=20, b=20), height=280, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No critical scenario data.")
-
-    with col2:
-        crit_shift = safe_value_counts(crit_df, 'shift')
-        if len(crit_shift) > 0:
-            fig = go.Figure(go.Pie(labels=crit_shift.index, values=crit_shift.values, marker_colors=[MEDIUM_COLOR, HIGH_COLOR, CRITICAL_COLOR], textinfo='label+percent', textfont=dict(color=TEXT_COLOR)))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=280)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No critical shift data.")
-
-    with col3:
-        if len(crit_df) > 0:
-            crit_hour = crit_df.groupby(crit_df['timestamp'].dt.hour).size()
-            if len(crit_hour) > 0:
-                fig = go.Figure(go.Bar(x=crit_hour.index, y=crit_hour.values, marker_color=CRITICAL_COLOR))
-                fig.add_vrect(x0=22, x1=6, fillcolor=HIGH_COLOR, opacity=0.15, line_width=0)
-                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Critical Count", margin=dict(l=20, r=20, t=20, b=20), height=280, showlegend=False)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No critical hourly data.")
-        else:
-            st.info("No critical alerts for hourly analysis.")
+    st.markdown("<h4 style='color:#F8FAFC;'>Proactive Intervention Triggers</h4>", unsafe_allow_html=True)
+    
+    triggers = []
+    if len(filtered_df) > 0:
+        # Trigger 1: High night shift ratio
+        night_alerts = filtered_df[filtered_df['shift'] == SHIFTS[2]] if len(SHIFTS) > 2 else pd.DataFrame()
+        if len(night_alerts) > 0 and len(filtered_df) > 0:
+            night_ratio = len(night_alerts) / len(filtered_df)
+            if night_ratio > 0.4:
+                triggers.append(("Night Shift Overload", f"{night_ratio:.1%} of alerts occur during night shift. Consider additional supervision.", CRITICAL_COLOR))
+        
+        # Trigger 2: Unresolved criticals
+        if unresp_crit > 2:
+            triggers.append(("Critical Response Failure", f"{unresp_crit} critical alerts without response. Escalate to site safety officer.", CRITICAL_COLOR))
+        
+        # Trigger 3: High FP rate
+        if fp_rate > 10:
+            triggers.append(("Model Degradation", f"False positive rate at {fp_rate:.1f}%. Retrain detection model.", HIGH_COLOR))
+        
+        # Trigger 4: Zone concentration
+        if len(filtered_df) > 0:
+            top_zone = filtered_df['zone'].value_counts().head(1)
+            if len(top_zone) > 0 and top_zone.iloc[0] / len(filtered_df) > 0.3:
+                triggers.append(("Zone Hotspot", f"{top_zone.index[0]} generates {top_zone.iloc[0]/len(filtered_df):.1%} of all alerts. Inspect equipment and workflow.", HIGH_COLOR))
+    
+    if triggers:
+        for title, desc, color in triggers:
+            st.markdown(f"""
+            <div style="background: {color}15; border-left: 4px solid {color}; border-radius: 0 12px 12px 0; padding: 16px; margin: 8px 0;">
+                <span style="color:{color}; font-weight:700; font-size:14px;">{title}</span><br>
+                <span style="color:#F8FAFC; font-size:13px;">{desc}</span>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="background: #22C55E15; border-left: 4px solid #22C55E; border-radius: 0 12px 12px 0; padding: 16px; margin: 8px 0;">
+            <span style="color:#22C55E; font-weight:700; font-size:14px;">All Systems Nominal</span><br>
+            <span style="color:#F8FAFC; font-size:13px;">No proactive triggers activated. Safety parameters within expected ranges.</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -803,102 +827,63 @@ with tab5:
     st.markdown("""
     <div style="margin-bottom:24px;">
         <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Logbook & Resolve</h2>
-        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Review, assign, comment, and resolve safety events -- just like Buddywise's logbook</p>
+        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Alert audit trail, resolution workflow, and compliance logging</p>
     </div>
     """, unsafe_allow_html=True)
 
-    search_col1, search_col2, search_col3, search_col4 = st.columns([2, 1, 1, 1])
-    with search_col1:
-        search_text = st.text_input("Search (Alert ID, Worker, Zone)", placeholder="e.g. ALT-00123 or W042")
-    with search_col2:
-        filter_resolved = st.selectbox("Status", options=["All", "Resolved", "Unresolved", "Unresponded"])
-    with search_col3:
-        filter_scenario = st.selectbox("Scenario", options=["All"] + list(RISK_SCENARIOS.keys()))
-    with search_col4:
-        sort_by = st.selectbox("Sort By", options=["Newest First", "Severity", "Response Time"])
-
-    display_df = filtered_df.copy()
-    if search_text:
-        mask = (display_df['alert_id'].str.contains(search_text, case=False, na=False) |
-                display_df['worker_id'].str.contains(search_text, case=False, na=False) |
-                display_df['zone'].str.contains(search_text, case=False, na=False))
-        display_df = display_df[mask]
-
-    if filter_resolved == "Resolved":
-        display_df = display_df[display_df['resolved'] == True]
-    elif filter_resolved == "Unresolved":
-        display_df = display_df[display_df['resolved'] == False]
-    elif filter_resolved == "Unresponded":
-        display_df = display_df[display_df['responded'] == False]
-
-    if filter_scenario != "All":
-        display_df = display_df[display_df['scenario_type'] == filter_scenario]
-
-    if sort_by == "Severity":
-        severity_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
-        display_df = display_df.sort_values('severity', key=lambda x: x.map(severity_order))
-    elif sort_by == "Response Time":
-        display_df = display_df.sort_values('response_time_mins', ascending=False)
-    else:
-        display_df = display_df.sort_values('timestamp', ascending=False)
-
-    display_cols = ['alert_id', 'timestamp', 'site', 'zone', 'scenario_type', 'violation_type', 'severity', 'shift', 'worker_id', 'responded', 'resolved', 'assigned_to', 'comments']
-    display_formatted = display_df[display_cols].copy()
-    display_formatted['timestamp'] = display_formatted['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
-    display_formatted['responded'] = display_formatted['responded'].map({True: 'YES', False: 'NO'})
-    display_formatted['resolved'] = display_formatted['resolved'].map({True: 'YES', False: 'PENDING'})
-
-    def color_severity(val):
-        color = SEVERITY_COLORS.get(val, TEXT_COLOR)
-        return f'color: {color}; font-weight: 600;'
-
-    st.dataframe(
-        display_formatted.style.applymap(color_severity, subset=['severity']),
-        use_container_width=True, hide_index=True,
-        column_config={
-            "alert_id": st.column_config.TextColumn("Alert ID", width="small"),
-            "timestamp": st.column_config.TextColumn("Time", width="medium"),
-            "scenario_type": st.column_config.TextColumn("Scenario", width="medium"),
-            "violation_type": st.column_config.TextColumn("Violation", width="large"),
-            "severity": st.column_config.TextColumn("Severity", width="small"),
-            "responded": st.column_config.TextColumn("Resp.", width="small"),
-            "resolved": st.column_config.TextColumn("Res.", width="small"),
-        }
-    )
-
-    col1, col2, col3 = st.columns(3)
+    # Resolution controls
+    col1, col2 = st.columns([2, 1])
+    
     with col1:
-        csv = filtered_df.to_csv(index=False).encode('utf-8')
-        st.download_button("Export Logbook (CSV)", csv, f"buddywise_logbook_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+        st.markdown("<h4 style='color:#F8FAFC;'>Unresolved Alerts</h4>", unsafe_allow_html=True)
+        unresolved = filtered_df[filtered_df['resolved'] == False].sort_values('timestamp', ascending=False)
+        if len(unresolved) > 0:
+            display_cols = ['timestamp', 'site', 'zone', 'scenario_type', 'severity', 'worker_id', 'description']
+            display_cols = [c for c in display_cols if c in unresolved.columns]
+            st.dataframe(
+                unresolved[display_cols].head(50),
+                use_container_width=True,
+                height=400
+            )
+        else:
+            st.info("All alerts resolved. Excellent response performance.")
+
     with col2:
-        unresolved_count = len(filtered_df[filtered_df['resolved'] == False])
-        st.markdown(f"<p style='color:#94A3B8; font-size:13px; text-align:center; padding-top:8px;'>{unresolved_count} unresolved events requiring attention</p>", unsafe_allow_html=True)
-    with col3:
-        if st.button("Generate Incident Report", use_container_width=True):
-            st.success(f"Incident report generated for {len(filtered_df)} events. Ready for regulatory submission.")
+        st.markdown("<h4 style='color:#F8FAFC;'>Quick Actions</h4>", unsafe_allow_html=True)
+        if len(unresolved) > 0:
+            st.metric("Pending", len(unresolved))
+            st.metric("Critical Pending", len(unresolved[unresolved['severity'] == 'CRITICAL']))
+            
+            if st.button("Mark All Resolved", type="primary", use_container_width=True):
+                st.success("Batch resolution simulated. In production, this would update the database.")
+            
+            selected_alert = st.selectbox(
+                "Select Alert to Resolve",
+                options=unresolved['alert_id'].tolist() if 'alert_id' in unresolved.columns else [],
+                format_func=lambda x: f"Alert #{x}"
+            )
+            
+            if selected_alert and st.button("Resolve Selected", use_container_width=True):
+                st.success(f"Alert {selected_alert} marked as resolved.")
+        else:
+            st.metric("Pending", 0)
+            st.metric("Critical Pending", 0)
+            st.info("No actions required.")
 
     st.divider()
-    st.markdown("<h4 style='color:#F8FAFC;'>Quick Assignment Simulation</h4>", unsafe_allow_html=True)
 
-    unassigned = filtered_df[filtered_df['assigned_to'].isna() & (filtered_df['responded'] == False)].head(5)
-    if len(unassigned) > 0:
-        for _, alert in unassigned.iterrows():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.markdown(f"""
-                <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:8px; padding:10px;">
-                    <span style="color:{SEVERITY_COLORS[alert['severity']]}; font-weight:700;">{alert['severity']}</span>
-                    <span style="color:#F8FAFC; font-size:13px;"> | {alert['violation_type']} | {alert['zone']}</span>
-                    <span style="color:#94A3B8; font-size:11px; display:block; margin-top:2px;">{alert['timestamp'].strftime('%Y-%m-%d %H:%M')} | {alert['site']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                assignee = st.selectbox(f"Assign {alert['alert_id']}", options=['Safety Officer', 'Supervisor', 'Site Manager', 'Engineering'], key=f"assign_{alert['alert_id']}", label_visibility="collapsed")
-            with col3:
-                if st.button("Assign", key=f"btn_{alert['alert_id']}"):
-                    st.success(f"Assigned {alert['alert_id']} to {assignee}")
+    st.markdown("<h4 style='color:#F8FAFC;'>Alert Logbook</h4>", unsafe_allow_html=True)
+    log_cols = ['timestamp', 'site', 'zone', 'scenario_type', 'severity', 'worker_id', 'responded', 'response_time_mins', 'resolved', 'is_false_positive']
+    log_cols = [c for c in log_cols if c in filtered_df.columns]
+    
+    if len(filtered_df) > 0:
+        st.dataframe(
+            filtered_df[log_cols].sort_values('timestamp', ascending=False).head(100),
+            use_container_width=True,
+            height=500
+        )
     else:
-        st.info("All events are assigned. Great operational discipline!")
+        st.info("No log entries match current filters.")
 
 
 # ============================================================
@@ -907,145 +892,68 @@ with tab5:
 with tab6:
     st.markdown("""
     <div style="margin-bottom:24px;">
-        <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Smart Notification Center</h2>
-        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Configure smart thresholds and notification rules -- SMS, Email, IoT, Dashboard</p>
+        <h2 style="color:#F8FAFC; margin:0; font-size:28px; font-weight:800;">Notification Center</h2>
+        <p style="color:#94A3B8; margin:6px 0 0 0; font-size:14px;">Escalation rules, stakeholder mapping, and dispatch logs</p>
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 2])
+    col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<h4 style='color:#F8FAFC;'>Notification Rules</h4>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#F8FAFC; font-weight:600; font-size:13px;">CRITICAL Alerts</span>
-                <span style="background:#EF4444; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">ACTIVE</span>
-            </div>
-            <div style="color:#94A3B8; font-size:12px; line-height:1.6;">
-                Channels: SMS + Email + Dashboard + IoT Alarm<br>
-                Threshold: Immediate (0 min delay)<br>
-                Escalation: Auto-escalate if unresponded > 5 min
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#F8FAFC; font-weight:600; font-size:13px;">HIGH Alerts</span>
-                <span style="background:#F97316; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">ACTIVE</span>
-            </div>
-            <div style="color:#94A3B8; font-size:12px; line-height:1.6;">
-                Channels: Email + Dashboard + IoT Alarm<br>
-                Threshold: Immediate<br>
-                Escalation: Supervisor after 15 min unresponded
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#F8FAFC; font-weight:600; font-size:13px;">MEDIUM Alerts</span>
-                <span style="background:#EAB308; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">ACTIVE</span>
-            </div>
-            <div style="color:#94A3B8; font-size:12px; line-height:1.6;">
-                Channels: Email + Dashboard<br>
-                Threshold: Batch every 30 min<br>
-                Escalation: Daily summary
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="background:#151E32; border:1px solid #2D3A4F; border-radius:12px; padding:16px; margin:12px 0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#F8FAFC; font-weight:600; font-size:13px;">LOW Alerts</span>
-                <span style="background:#22C55E; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;">ACTIVE</span>
-            </div>
-            <div style="color:#94A3B8; font-size:12px; line-height:1.6;">
-                Channels: Dashboard only<br>
-                Threshold: Daily digest<br>
-                Escalation: Weekly trend report
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<h5 style='color:#F8FAFC; margin-top:16px;'>Custom Rule</h5>", unsafe_allow_html=True)
-        custom_scenario = st.selectbox("When scenario is", options=list(RISK_SCENARIOS.keys()))
-        custom_threshold = st.number_input("And alert count exceeds", min_value=1, value=5)
-        custom_channel = st.multiselect("Notify via", options=['SMS', 'Email', 'Dashboard', 'IoT Alarm', 'Slack'], default=['Email', 'Dashboard'])
-        if st.button("Create Rule", use_container_width=True):
-            st.success(f"Rule created: {custom_scenario} > {custom_threshold} alerts -> {', '.join(custom_channel)}")
+        st.markdown("<h4 style='color:#F8FAFC;'>Escalation Matrix</h4>", unsafe_allow_html=True)
+        escalation_data = {
+            'Severity': ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+            'Response Time SLA': ['5 min', '15 min', '1 hour', '4 hours'],
+            'Notify': ['Site Manager + Safety Officer + Emergency Services', 'Department Lead + Safety Officer', 'Supervisor', 'Log Only'],
+            'Escalation Path': ['Immediate', '15 min delay', '1 hour delay', 'End of shift']
+        }
+        esc_df = pd.DataFrame(escalation_data)
+        st.dataframe(esc_df, use_container_width=True, hide_index=True)
 
     with col2:
-        st.markdown("<h4 style='color:#F8FAFC;'>Notification Analytics</h4>", unsafe_allow_html=True)
-
-        channel_data = []
-        for _, alert in filtered_df.iterrows():
-            channels = alert['notification_channels'].split(', ')
-            for ch in channels:
-                channel_data.append({'channel': ch.strip(), 'severity': alert['severity'], 'timestamp': alert['timestamp']})
-
-        channel_df = pd.DataFrame(channel_data)
-        channel_counts = safe_value_counts(channel_df, 'channel')
-
-        if len(channel_counts) > 0:
-            fig = go.Figure(go.Bar(
-                x=channel_counts.values, y=channel_counts.index, orientation='h',
-                marker=dict(color=channel_counts.values, colorscale=[[0, ACCENT_COLOR], [1, ACCENT_GLOW]]),
-                text=channel_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)
-            ))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Notification Count", yaxis_title=None, margin=dict(l=20, r=60, t=40, b=20), height=300, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No notification data available.")
-
-        st.markdown("<h5 style='color:#F8FAFC; margin-top:16px;'>Channel x Severity Matrix</h5>", unsafe_allow_html=True)
-        if len(channel_df) > 0:
-            ch_sev = channel_df.groupby(['channel', 'severity']).size().unstack(fill_value=0)
-            for col in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
-                if col not in ch_sev.columns:
-                    ch_sev[col] = 0
-            ch_sev = ch_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
-
-            fig = go.Figure(data=go.Heatmap(
-                z=ch_sev.values, x=ch_sev.columns, y=ch_sev.index,
-                colorscale=[[0, BG_COLOR], [0.3, MEDIUM_COLOR], [0.7, HIGH_COLOR], [1, CRITICAL_COLOR]],
-                text=ch_sev.values, texttemplate="%{text}", textfont=dict(color=TEXT_COLOR, size=12),
-                hovertemplate='Channel: %{y}<br>Severity: %{x}<br>Count: %{z}<extra></extra>',
-                colorbar=dict(title="Count", titlefont=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
-            ))
-            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Channel", margin=dict(l=20, r=80, t=40, b=20), height=350)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No channel severity data.")
-
-        st.markdown("<h5 style='color:#F8FAFC; margin-top:16px;'>Escalation Timeline</h5>", unsafe_allow_html=True)
-        unresp = filtered_df[filtered_df['responded'] == False]
-        if len(unresp) > 0:
-            unresp_hourly = unresp.groupby(unresp['timestamp'].dt.hour).size()
-            if len(unresp_hourly) > 0:
-                fig = go.Figure(go.Bar(x=unresp_hourly.index, y=unresp_hourly.values, marker_color=CRITICAL_COLOR))
-                fig.add_hline(y=safe_mean(unresp_hourly), line_dash="dash", line_color=MUTED_TEXT, annotation_text=f"Avg: {safe_mean(unresp_hourly):.1f}/hour", annotation_position="top right")
-                fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour of Day", yaxis_title="Unresponded Count", margin=dict(l=20, r=20, t=40, b=20), height=250, showlegend=False)
-                st.plotly_chart(fig, use_container_width=True)
+        st.markdown("<h4 style='color:#F8FAFC;'>Recent Notifications</h4>", unsafe_allow_html=True)
+        if len(filtered_df) > 0:
+            recent_crit = filtered_df[filtered_df['severity'] == 'CRITICAL'].tail(10)
+            if len(recent_crit) > 0:
+                for _, row in recent_crit.iterrows():
+                    ts = row['timestamp'].strftime('%H:%M') if pd.notnull(row['timestamp']) else 'Unknown'
+                    st.markdown(f"""
+                    <div style="background: #151E32; border-left: 3px solid {CRITICAL_COLOR}; border-radius: 0 8px 8px 0; padding: 10px; margin: 6px 0;">
+                        <span style="color:#F8FAFC; font-size:12px; font-weight:600;">{ts} - {row.get('scenario_type', 'Unknown')}</span><br>
+                        <span style="color:#94A3B8; font-size:11px;">{row.get('site', 'Unknown')} | {row.get('zone', 'Unknown')} | {row.get('worker_id', 'Unknown')}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("No hourly escalation data.")
+                st.info("No critical alerts in current view.")
         else:
-            st.success("All alerts responded! Zero escalation queue.")
+            st.info("No data available.")
 
+    st.divider()
+
+    st.markdown("<h4 style='color:#F8FAFC;'>Stakeholder Configuration</h4>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.text_input("Site Manager Email", value="manager@buddywise.ai")
+        st.text_input("Safety Officer Email", value="safety@buddywise.ai")
+    with col2:
+        st.text_input("Emergency Contact", value="+49-170-0000000")
+        st.selectbox("Notification Channel", ["SMS + Email", "Email Only", "App Push", "PagerDuty"])
+    with col3:
+        st.checkbox("Weekend Escalation", value=True)
+        st.checkbox("Auto-Notify Emergency Services", value=False)
+        st.checkbox("Daily Digest", value=True)
+    
+    if st.button("Save Configuration", type="primary"):
+        st.success("Notification settings saved (simulated).")
 
 # ============================================================
 # FOOTER
 # ============================================================
 st.divider()
-st.markdown("""
-<div style="text-align:center; color:#94A3B8; font-size:12px; padding:20px 0 40px 0;">
-    <p style="margin:0 0 8px 0;"><span style="font-size:16px;">&#128737;</span> <b style="color:#F8FAFC;">Buddywise Safety Intelligence Command Center</b></p>
-    <p style="margin:0 0 8px 0;">5000+ simulated alerts across 5 German industrial sites | 6 risk scenarios | ILO: 2.3 million work deaths/year</p>
-    <p style="margin:0; color:#3B82F6; font-weight:600;">Built by Tanishq Kumar Singh | Working Student (Tech & Ops) Candidate | Berlin, 2026</p>
+st.markdown(f"""
+<div style="text-align:center; color:#94A3B8; font-size:11px; padding: 8px 0;">
+    Buddywise Safety Intelligence Command Center | Interview Project July 2026<br>
+    Built with Streamlit + Plotly | Data simulated for demonstration
 </div>
 """, unsafe_allow_html=True)
