@@ -264,6 +264,13 @@ def create_kpi_card(title, value, subtitle="", color="#F8FAFC", delta=None):
     """, unsafe_allow_html=True)
 
 
+
+def safe_mean(series):
+    return series.mean() if len(series) > 0 else 0
+
+def safe_value_counts(df, column):
+    return df[column].value_counts() if len(df) > 0 else pd.Series(dtype=int)
+
 # ============================================================
 # TABS
 # ============================================================
@@ -292,8 +299,8 @@ with tab1:
     critical = len(filtered_df[filtered_df['severity'] == 'CRITICAL'])
     crit_pct = (critical / total * 100) if total > 0 else 0
     unresp_crit = len(filtered_df[(filtered_df['severity'] == 'CRITICAL') & (filtered_df['responded'] == False)])
-    fp_rate = filtered_df['is_false_positive'].mean() * 100
-    avg_resp = filtered_df[filtered_df['responded'] == True]['response_time_mins'].mean() if len(filtered_df[filtered_df['responded'] == True]) > 0 else 0
+    fp_rate = safe_mean(filtered_df['is_false_positive']) * 100
+    avg_resp = safe_mean(filtered_df[filtered_df['responded'] == True]['response_time_mins'])
     resolved = filtered_df['resolved'].sum()
     res_rate = (resolved / total * 100) if total > 0 else 0
 
@@ -333,7 +340,7 @@ with tab1:
 
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Scenario Breakdown</h4>", unsafe_allow_html=True)
-        scenario_counts = filtered_df['scenario_type'].value_counts()
+        scenario_counts = safe_value_counts(filtered_df, 'scenario_type')
         colors = [SCENARIO_COLORS.get(s, ACCENT_COLOR) for s in scenario_counts.index]
 
         fig = go.Figure(data=[go.Pie(
@@ -352,7 +359,7 @@ with tab1:
 
     with col1:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Severity Distribution</h4>", unsafe_allow_html=True)
-        sev_counts = filtered_df['severity'].value_counts()
+        sev_counts = safe_value_counts(filtered_df, 'severity')
         colors = [SEVERITY_COLORS[s] for s in sev_counts.index]
         fig = go.Figure(go.Bar(x=sev_counts.index, y=sev_counts.values, marker_color=colors, text=sev_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)))
         fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=20, t=40, b=20), height=300, showlegend=False)
@@ -373,7 +380,7 @@ with tab1:
 
     with col3:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Site</h4>", unsafe_allow_html=True)
-        site_counts = filtered_df['site'].value_counts()
+        site_counts = safe_value_counts(filtered_df, 'site')
         fig = go.Figure(go.Bar(
             y=site_counts.index, x=site_counts.values, orientation='h',
             marker=dict(color=site_counts.values, colorscale=[[0, LOW_COLOR], [0.5, MEDIUM_COLOR], [1, CRITICAL_COLOR]], showscale=False),
@@ -469,8 +476,8 @@ with tab2:
             st.markdown("<h4 style='color:#F8FAFC;'>Zone Risk Summary</h4>", unsafe_allow_html=True)
             zone_risk = site_alerts.groupby('zone').agg({
                 'alert_id': 'count',
-                'severity': lambda x: (x == 'CRITICAL').sum() / len(x) * 100,
-                'response_time_mins': 'mean'
+                'severity': lambda x: (x == 'CRITICAL').sum() / len(x) * 100 if len(x) > 0 else 0,
+                'response_time_mins': lambda x: x.mean() if len(x) > 0 else 0
             }).reset_index()
             zone_risk.columns = ['zone', 'total', 'critical_pct', 'avg_response']
             zone_risk = zone_risk.sort_values('critical_pct', ascending=False)
@@ -529,7 +536,7 @@ with tab3:
 
     with col1:
         st.markdown("<h4 style='color:#F8FAFC;'>Top 15 Highest-Risk Workers</h4>", unsafe_allow_html=True)
-        top_risk = filtered_workers.nlargest(15, 'risk_score')
+        top_risk = filtered_workers.nlargest(min(15, len(filtered_workers)), 'risk_score') if len(filtered_workers) > 0 else filtered_workers
 
         fig = go.Figure(go.Bar(
             x=top_risk['risk_score'], y=top_risk['worker_id'], orientation='h',
@@ -569,7 +576,7 @@ with tab3:
             'avg_alerts': len(worker_alerts) / len(subset) if len(subset) > 0 else 0,
             'avg_critical': len(worker_alerts[worker_alerts['severity'] == 'CRITICAL']) / len(subset) if len(subset) > 0 else 0,
             'avg_risk': subset['risk_score'].mean(),
-            'avg_response': worker_alerts[worker_alerts['responded'] == True]['response_time_mins'].mean() if len(worker_alerts) > 0 else 0
+            'avg_response': safe_mean(worker_alerts[worker_alerts['responded'] == True]['response_time_mins'])
         })
 
     train_df = pd.DataFrame(training_comparison)
@@ -726,13 +733,13 @@ with tab4:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        crit_violation = crit_df['scenario_type'].value_counts().head(5)
+        crit_violation = safe_value_counts(crit_df, 'scenario_type').head(5)
         fig = go.Figure(go.Bar(x=crit_violation.values, y=crit_violation.index, orientation='h', marker_color=CRITICAL_COLOR, text=crit_violation.values, textposition='outside'))
         fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=40, t=20, b=20), height=280, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        crit_shift = crit_df['shift'].value_counts()
+        crit_shift = safe_value_counts(crit_df, 'shift')
         fig = go.Figure(go.Pie(labels=crit_shift.index, values=crit_shift.values, marker_colors=[MEDIUM_COLOR, HIGH_COLOR, CRITICAL_COLOR], textinfo='label+percent', textfont=dict(color=TEXT_COLOR)))
         fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=280)
         st.plotly_chart(fig, use_container_width=True)
@@ -933,7 +940,7 @@ with tab6:
                 channel_data.append({'channel': ch.strip(), 'severity': alert['severity'], 'timestamp': alert['timestamp']})
 
         channel_df = pd.DataFrame(channel_data)
-        channel_counts = channel_df['channel'].value_counts()
+        channel_counts = safe_value_counts(channel_df, 'channel')
 
         fig = go.Figure(go.Bar(
             x=channel_counts.values, y=channel_counts.index, orientation='h',
@@ -965,7 +972,7 @@ with tab6:
         if len(unresp) > 0:
             unresp_hourly = unresp.groupby(unresp['timestamp'].dt.hour).size()
             fig = go.Figure(go.Bar(x=unresp_hourly.index, y=unresp_hourly.values, marker_color=CRITICAL_COLOR))
-            fig.add_hline(y=unresp_hourly.mean(), line_dash="dash", line_color=MUTED_TEXT, annotation_text=f"Avg: {unresp_hourly.mean():.1f}/hour", annotation_position="top right")
+            fig.add_hline(y=safe_mean(unresp_hourly), line_dash="dash", line_color=MUTED_TEXT, annotation_text=f"Avg: {safe_mean(unresp_hourly):.1f}/hour", annotation_position="top right")
             fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour of Day", yaxis_title="Unresponded Count", margin=dict(l=20, r=20, t=40, b=20), height=250, showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
         else:
