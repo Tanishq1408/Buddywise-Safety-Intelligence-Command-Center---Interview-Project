@@ -368,16 +368,19 @@ with tab1:
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Hour</h4>", unsafe_allow_html=True)
         filtered_df['hour'] = filtered_df['timestamp'].dt.hour
-        hourly = filtered_df.groupby('hour').size().reset_index(name='count')
-        fig = go.Figure(go.Scatter(
-            x=hourly['hour'], y=hourly['count'], mode='lines+markers',
-            line=dict(color=ACCENT_COLOR, width=3), marker=dict(size=8),
-            fill='tozeroy', fillcolor=f"{ACCENT_COLOR}15"
-        ))
-        fig.add_vrect(x0=22, x1=6, fillcolor=CRITICAL_COLOR, opacity=0.12, line_width=0, annotation_text="Night Shift", annotation_position="top left", annotation_font_color=CRITICAL_COLOR)
-        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Count", margin=dict(l=20, r=20, t=60, b=20), height=300)
-        st.plotly_chart(fig, use_container_width=True)
-
+               hourly = filtered_df.groupby('hour').size().reset_index(name='count')
+        if len(hourly) > 0:
+            fig = go.Figure(go.Scatter(
+                x=hourly['hour'], y=hourly['count'], mode='lines+markers',
+                line=dict(color=ACCENT_COLOR, width=3), marker=dict(size=8),
+                fill='tozeroy', fillcolor="rgba(59, 130, 246, 0.15)"
+            ))
+            fig.add_vrect(x0=22, x1=6, fillcolor=CRITICAL_COLOR, opacity=0.12, line_width=0, annotation_text="Night Shift", annotation_position="top left", annotation_font_color=CRITICAL_COLOR)
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Hour", yaxis_title="Count", margin=dict(l=20, r=20, t=60, b=20), height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hourly data available for current filters.")
+            
     with col3:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Site</h4>", unsafe_allow_html=True)
         site_counts = safe_value_counts(filtered_df, 'site')
