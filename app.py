@@ -79,43 +79,33 @@ st.markdown("""
         background: linear-gradient(135deg, #151E32 0%, #0B1120 100%);
         border: 1px solid #2D3A4F;
         border-radius: 16px;
-        padding: 20px 16px;
+        padding: 24px;
         text-align: center;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        height: 100%;
-        min-height: 140px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
     }
     .metric-card:hover {
         border-color: #3B82F6;
         box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
     }
     .metric-value {
-        font-size: 32px;
+        font-size: 36px;
         font-weight: 800;
         color: #F8FAFC;
         letter-spacing: -0.5px;
-        line-height: 1.2;
-        margin-bottom: 4px;
     }
     .metric-label {
-        font-size: 11px;
+        font-size: 13px;
         color: #94A3B8;
-        margin-top: 4px;
+        margin-top: 8px;
         font-weight: 500;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        line-height: 1.3;
     }
     .metric-delta {
-        font-size: 11px;
-        margin-top: 4px;
+        font-size: 12px;
+        margin-top: 6px;
         font-weight: 600;
-        line-height: 1.2;
     }
 
     .insight-card {
@@ -269,7 +259,6 @@ def create_kpi_card(title, value, subtitle="", color="#F8FAFC", delta=None):
     <div class="metric-card">
         <div class="metric-value" style="color:{color};">{value}</div>
         <div class="metric-label">{title}</div>
-        <div class="metric-label" style="margin-top:2px;">{subtitle}</div>
         {delta_html}
     </div>
     """, unsafe_allow_html=True)
@@ -316,20 +305,13 @@ with tab1:
     resolved = filtered_df['resolved'].sum()
     res_rate = (resolved / total * 100) if total > 0 else 0
 
-    # FIXED: Use consistent column structure with proper alignment
-    cols = st.columns(6)
-    metrics = [
-        ("Total Alerts", f"{total:,}", "All scenarios", TEXT_COLOR, None),
-        ("Critical", f"{critical}", f"{crit_pct:.1f}% of total", CRITICAL_COLOR, None),
-        ("Unresponded Critical", f"{unresp_crit}", "Requires escalation", CRITICAL_COLOR if unresp_crit > 0 else TEXT_COLOR, None),
-        ("False Positive Rate", f"{fp_rate:.1f}%", "AI model quality", MEDIUM_COLOR if fp_rate > 8 else LOW_COLOR, None),
-        ("Avg Response", f"{avg_resp:.1f}m", "All severity levels", ACCENT_COLOR, None),
-        ("Resolution Rate", f"{res_rate:.1f}%", f"{int(resolved)} resolved", LOW_COLOR, None)
-    ]
-    
-    for col, (title, value, subtitle, color, delta) in zip(cols, metrics):
-        with col:
-            create_kpi_card(title, value, subtitle, color, delta)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    with col1: create_kpi_card("Total Alerts", f"{total:,}", "All scenarios")
+    with col2: create_kpi_card("Critical", f"{critical}", f"{crit_pct:.1f}% of total", CRITICAL_COLOR)
+    with col3: create_kpi_card("Unresponded Critical", f"{unresp_crit}", "Requires escalation", CRITICAL_COLOR if unresp_crit > 0 else TEXT_COLOR)
+    with col4: create_kpi_card("False Positive Rate", f"{fp_rate:.1f}%", "AI model quality", MEDIUM_COLOR if fp_rate > 8 else LOW_COLOR)
+    with col5: create_kpi_card("Avg Response", f"{avg_resp:.1f}m", "All severity levels", ACCENT_COLOR)
+    with col6: create_kpi_card("Resolution Rate", f"{res_rate:.1f}%", f"{resolved} resolved", LOW_COLOR)
 
     st.divider()
 
@@ -385,7 +367,7 @@ with tab1:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Severity Distribution</h4>", unsafe_allow_html=True)
         sev_counts = safe_value_counts(filtered_df, 'severity')
         if len(sev_counts) > 0:
-            colors = [SEVERITY_COLORS.get(s, ACCENT_COLOR) for s in sev_counts.index]
+            colors = [SEVERITY_COLORS[s] for s in sev_counts.index]
             fig = go.Figure(go.Bar(x=sev_counts.index, y=sev_counts.values, marker_color=colors, text=sev_counts.values, textposition='outside', textfont=dict(color=TEXT_COLOR)))
             fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, margin=dict(l=20, r=20, t=40, b=20), height=300, showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
@@ -395,9 +377,8 @@ with tab1:
     with col2:
         st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Alerts by Hour</h4>", unsafe_allow_html=True)
         if len(filtered_df) > 0:
-            hourly_df = filtered_df.copy()
-            hourly_df['hour'] = hourly_df['timestamp'].dt.hour
-            hourly = hourly_df.groupby('hour').size().reset_index(name='count')
+            filtered_df['hour'] = filtered_df['timestamp'].dt.hour
+            hourly = filtered_df.groupby('hour').size().reset_index(name='count')
             if len(hourly) > 0:
                 fig = go.Figure(go.Scatter(
                     x=hourly['hour'], y=hourly['count'], mode='lines+markers',
@@ -429,8 +410,8 @@ with tab1:
     st.divider()
     st.markdown("<h4 style='color:#F8FAFC; font-size:16px;'>Critical Insights</h4>", unsafe_allow_html=True)
 
-    night_df = filtered_df[filtered_df['shift'] == SHIFTS[2]] if len(SHIFTS) > 2 else pd.DataFrame()
-    day_df = filtered_df[filtered_df['shift'] != SHIFTS[2]] if len(SHIFTS) > 2 else filtered_df.copy()
+    night_df = filtered_df[filtered_df['shift'] == SHIFTS[2]]
+    day_df = filtered_df[filtered_df['shift'] != SHIFTS[2]]
     night_crit_rate = (len(night_df[night_df['severity'] == 'CRITICAL']) / len(night_df) * 100) if len(night_df) > 0 else 0
     day_crit_rate = (len(day_df[day_df['severity'] == 'CRITICAL']) / len(day_df) * 100) if len(day_df) > 0 else 0
 
@@ -500,11 +481,8 @@ with tab2:
                     zone_sev[sev] = 0
             zone_sev = zone_sev[['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']]
             
-            # FIXED: Use proper colorbar title format for Plotly 5.x
             fig = go.Figure(data=go.Heatmap(
-                z=zone_sev.values, 
-                x=zone_sev.columns, 
-                y=zone_sev.index,
+                z=zone_sev.values, x=zone_sev.columns, y=zone_sev.index,
                 colorscale=[[0, BG_COLOR], [0.3, LOW_COLOR], [0.6, MEDIUM_COLOR], [0.8, HIGH_COLOR], [1, CRITICAL_COLOR]],
                 hovertemplate='Zone: %{y}<br>Severity: %{x}<br>Alerts: %{z}<extra></extra>',
                 colorbar=dict(
@@ -512,15 +490,7 @@ with tab2:
                     tickfont=dict(color=TEXT_COLOR)
                 )
             ))
-            fig.update_layout(
-                plot_bgcolor=BG_COLOR, 
-                paper_bgcolor=BG_COLOR, 
-                font_color=TEXT_COLOR, 
-                xaxis_title="Severity", 
-                yaxis_title="Zone", 
-                margin=dict(l=20, r=80, t=40, b=20), 
-                height=450
-            )
+            fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Severity", yaxis_title="Zone", margin=dict(l=20, r=80, t=40, b=20), height=450)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for selected site.")
@@ -570,11 +540,8 @@ with tab2:
     st.markdown("<h4 style='color:#F8FAFC;'>Cross-Site Critical Alert Density</h4>", unsafe_allow_html=True)
     cross_site = filtered_df[filtered_df['severity'] == 'CRITICAL'].groupby(['site', 'zone']).size().unstack(fill_value=0)
     if len(cross_site) > 0:
-        # FIXED: Use proper colorbar title format for Plotly 5.x
         fig = go.Figure(data=go.Heatmap(
-            z=cross_site.values, 
-            x=cross_site.columns, 
-            y=cross_site.index,
+            z=cross_site.values, x=cross_site.columns, y=cross_site.index,
             colorscale=[[0, BG_COLOR], [0.5, HIGH_COLOR], [1, CRITICAL_COLOR]],
             hovertemplate='Site: %{y}<br>Zone: %{x}<br>Critical: %{z}<extra></extra>',
             colorbar=dict(
@@ -582,15 +549,7 @@ with tab2:
                 tickfont=dict(color=TEXT_COLOR)
             )
         ))
-        fig.update_layout(
-            plot_bgcolor=BG_COLOR, 
-            paper_bgcolor=BG_COLOR, 
-            font_color=TEXT_COLOR, 
-            xaxis_title="Zone", 
-            yaxis_title="Site", 
-            margin=dict(l=20, r=80, t=40, b=20), 
-            height=350
-        )
+        fig.update_layout(plot_bgcolor=BG_COLOR, paper_bgcolor=BG_COLOR, font_color=TEXT_COLOR, xaxis_title="Zone", yaxis_title="Site", margin=dict(l=20, r=80, t=40, b=20), height=350)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No critical alerts for cross-site heatmap.")
@@ -647,18 +606,33 @@ with tab3:
 
     st.markdown("<h4 style='color:#F8FAFC;'>Training Impact Analysis</h4>", unsafe_allow_html=True)
 
+    # FIXED: Proper training comparison with correct business logic
+    # Trained workers should have: fewer alerts, fewer critical alerts, lower risk, faster response
     training_comparison = []
     for trained in [True, False]:
         subset = filtered_workers[filtered_workers['training_completed'] == trained]
         worker_ids = subset['worker_id'].tolist()
         worker_alerts = filtered_df[filtered_df['worker_id'].isin(worker_ids)]
+        
+        # Per-worker averages (divide by number of workers in group, not alerts)
+        num_workers = len(subset)
+        total_alerts = len(worker_alerts)
+        critical_alerts = len(worker_alerts[worker_alerts['severity'] == 'CRITICAL'])
+        
+        # Response time: average of all responded alerts in this group
+        responded_alerts = worker_alerts[worker_alerts['responded'] == True]
+        avg_response = responded_alerts['response_time_mins'].mean() if len(responded_alerts) > 0 else 0
+        
+        # Risk score: average of workers in this group
+        avg_risk = subset['risk_score'].mean() if len(subset) > 0 else 0
+        
         training_comparison.append({
             'status': 'Trained' if trained else 'Untrained',
-            'workers': len(subset),
-            'avg_alerts': len(worker_alerts) / len(subset) if len(subset) > 0 else 0,
-            'avg_critical': len(worker_alerts[worker_alerts['severity'] == 'CRITICAL']) / len(subset) if len(subset) > 0 else 0,
-            'avg_risk': subset['risk_score'].mean() if len(subset) > 0 else 0,
-            'avg_response': safe_mean(worker_alerts[worker_alerts['responded'] == True]['response_time_mins'])
+            'workers': num_workers,
+            'avg_alerts': total_alerts / num_workers if num_workers > 0 else 0,
+            'avg_critical': critical_alerts / num_workers if num_workers > 0 else 0,
+            'avg_risk': avg_risk,
+            'avg_response': avg_response
         })
 
     train_df = pd.DataFrame(training_comparison)
@@ -704,6 +678,7 @@ with tab3:
     untrained_crit = train_df[train_df['status'] == 'Untrained']['avg_critical'].values[0] if len(train_df[train_df['status'] == 'Untrained']) > 0 else 0
     roi_pct = ((untrained_crit - trained_crit) / trained_crit * 100) if trained_crit > 0 else 0
 
+    # FIXED: Added unsafe_allow_html=True to render HTML properly
     st.markdown(f"""
     <div style="background: linear-gradient(90deg, {ACCENT_COLOR}20, {LOW_COLOR}20); border:1px solid {ACCENT_COLOR}; border-radius:16px; padding:24px; margin-top:20px; text-align:center;">
         <h3 style="color:{ACCENT_COLOR}; margin:0; font-size:24px; font-weight:800;">Training ROI: {roi_pct:.0f}% Reduction in Critical Alerts</h3>
@@ -711,7 +686,7 @@ with tab3:
             Untrained workers average <b>{untrained_crit:.2f}</b> critical alerts vs trained workers at <b>{trained_crit:.2f}</b>. 
             At an estimated 50000 EUR per serious injury (DGUV data), training investment pays for itself in weeks.</p>
     </div>
-    """)
+    """, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -783,7 +758,7 @@ with tab4:
     triggers = []
     if len(filtered_df) > 0:
         # Trigger 1: High night shift ratio
-        night_alerts = filtered_df[filtered_df['shift'] == SHIFTS[2]] if len(SHIFTS) > 2 else pd.DataFrame()
+        night_alerts = filtered_df[filtered_df['shift'] == SHIFTS[2]]
         if len(night_alerts) > 0 and len(filtered_df) > 0:
             night_ratio = len(night_alerts) / len(filtered_df)
             if night_ratio > 0.4:
